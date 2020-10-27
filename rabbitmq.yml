@@ -1,0 +1,13 @@
+version: "2"
+
+services:
+  stats:
+    image: bitnami/rabbitmq
+    environment:
+      - RABBITMQ_USERNAME=blended
+      - RABBITMQ_PASSWORD=makeitpopweBLENDED!1
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - "/root/rabbitmq_data:/bitnami"
