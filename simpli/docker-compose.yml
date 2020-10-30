@@ -12,7 +12,8 @@ services:
 
   celerybeat:
     build:
-      context: ./beats
+      context: .
+      dockerfile: Beatdockerfile
     container_name: simpli_celerybeat
     networks:
       - simpli
@@ -21,6 +22,7 @@ services:
   celeryflower:
     build:
       context: ./flower
+      dockerfile: Flowerdockerfile
     container_name: simpli_celeryflower
     networks:
       - simpli
