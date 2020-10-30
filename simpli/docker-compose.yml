@@ -21,7 +21,7 @@ services:
 
   celeryflower:
     build:
-      context: ./flower
+      context: .
       dockerfile: Flowerdockerfile
     container_name: simpli_celeryflower
     networks:
