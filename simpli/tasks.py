@@ -116,7 +116,6 @@ def save_tickers():
     data_list_dict = {}
 
     for i in range(WORKER_COUNT):
-        print(start_idx, end_idx)
         data_list_dict[str(i + 1)] = us_data_tickerlist[start_idx: end_idx]
         start_idx = end_idx
         if i == WORKER_COUNT - 2:
@@ -191,6 +190,6 @@ def save_data():
         save_data()
 
 
-if __name__ == "__main__":
-    save_tickers()
-    save_data()
+# if __name__ == "__main__":
+#     save_tickers()
+#     save_data()
