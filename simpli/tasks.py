@@ -3,6 +3,7 @@ import json
 import requests
 import redis
 import zstandard as zstd
+import sentry_sdk
 from celery import Celery
 from celery.schedules import crontab
 from dotenv import load_dotenv
@@ -14,8 +15,14 @@ REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
 RABBIT_HOST = os.getenv('RABBIT_HOST')
 RABBIT_USER = os.getenv('RABBIT_USER')
 RABBIT_PASSWORD = os.getenv('RABBIT_PASSWORD')
-RESPONSIBILITY = os.getenv('RESPONSIBILITY') # 데이터를 나누어 맡을 부분
+RESPONSIBILITY = os.getenv('RESPONSIBILITY')  # 데이터를 나누어 맡을 부분
 API_KEY = os.getenv(f'API_{RESPONSIBILITY}')
+WORKER_COUNT = int(os.getenv('WORKER_COUNT'))
+
+sentry_sdk.init(
+    "https://05806a5a14a14d0cb8bef35b555bef20@o158142.ingest.sentry.io/5444337",
+    traces_sample_rate=1.0
+)
 
 app = Celery(
     'simpli',
@@ -30,47 +37,29 @@ app.conf.beat_schedule = {
         'schedule': crontab(minute=0, hour='*/3'),
         'args': (),
     },
+    'save US price / fundamental data (every 12 hours)': {
+        'task': 'simpli.save_data',
+        'schedule': crontab(minute=0, hour='*/12'),
+        'args': (),
+    },
 }
 
 cctx = zstd.ZstdCompressor()
 dctx = zstd.ZstdDecompressor()
 
-keyname = {
-    'complete tickers': 'SIMPLI_COMPLETE_TICKERS',
-    'us tickers': 'SIMPLI_US_TICKERS',
-    'us tickers list': 'SIMPLI_US_TICKERS_LIST'
-}
 
 def cache_conn():
-    redis_client = redis.Redis(host=REDIS_HOST, port=6379, password=REDIS_PASSWORD)
+    redis_client = redis.Redis(
+        host=REDIS_HOST, port=6379, password=REDIS_PASSWORD)
     return redis_client
 
-def set_list(redis_client, data):
-    response = redis_client.rpush(data[0], *data[1:])
-    return response # returns 1 or 0
-
-def get_list(redis_client, key, type='str'):
-    response = redis_client.lrange(key, 0, -1)
-    temp = response
-    if type == 'int':
-        try:
-            is_int = int(response[0])
-            response = list(map(lambda x: int(x), response))
-        except ValueError:
-            response = temp
-    elif type == 'str':
-        response = list(map(lambda x: x.decode('utf-8'), response))
-    return response
-
-def add_to_list(redis_client, key, data):
-    response = redis_client.rpush(key, data)
-    return response # returns 1 or 0
 
 def save(redis_client, key, data):
     redis_client.set(
         key,
         cctx.compress(json.dumps(data).encode('utf8'))
     )
+
 
 def get(redis_client, key):
     return json.loads(dctx.decompress(redis_client.get(key)))
@@ -86,16 +75,122 @@ def save_tickers():
     url = f'https://eodhistoricaldata.com/api/exchange-symbol-list/US?fmt=json&api_token={API_KEY}'
     res = requests.get(url)
     data = res.json()
-    
-    # save complete data first
-    save(redis_client, keyname['complete tickers'], data)   
 
-    us_data = [d for d in data if d['Country'] == 'USA']
-    save(redis_client, keyname['us tickers'], us_data)
+    # Complete dictionary of security data provided by edohistorical (dict)
+    data_dict = {d['Code']: d for d in data}
+    save(
+        redis_client,
+        'SIMPLI_COMPLETE_TICKERS_DICT',
+        data_dict
+    )
 
-    us_data_tickerlist = [d['Code'] for d in us_data]
-    save(redis_client, keyname['us tickers list'], us_data_tickerlist)
+    # Filtered USA securities from Complete dictionary (dict)
+    us_dict = {key: val for key, val in data_dict.items()
+               if val['Country'] == 'USA'}
+    save(
+        redis_client,
+        'SIMPLI_US_TICKERS_DICT',
+        us_dict
+    )
+
+    # Changed Filtered USA securities to list with tickers only (list)
+    us_data_tickerlist = [d['Code'] for _, d in us_dict.items()]
+    save(
+        redis_client,
+        'SIMPLI_US_TICKERS_LIST',
+        us_data_tickerlist
+    )
+
+    # Type of all the securities in USA (list)
+    sec_types = list(set(d['Type'] for _, d in us_dict.items()))
+    save(
+        redis_client,
+        'SIMPLI_US_TICKERS_TYPES_LIST',
+        sec_types
+    )
+
+    # Divide tickers list by worker count (to divide work load among celery workers)
+    idx_step = len(us_data_tickerlist) // WORKER_COUNT
+    start_idx = 0
+    end_idx = idx_step
+    data_list_dict = {}
+
+    for i in range(WORKER_COUNT):
+        print(start_idx, end_idx)
+        data_list_dict[str(i + 1)] = us_data_tickerlist[start_idx: end_idx]
+        start_idx = end_idx
+        if i == WORKER_COUNT - 2:
+            end_idx = len(us_data_tickerlist)
+        else:
+            end_idx = (i + 2) * idx_step
+
+    for num, val in data_list_dict.items():
+        save(
+            redis_client,
+            f'SIMPLI_WORKER_{num}_US_TICKERS_LIST',
+            val
+        )
 
 
-# if __name__ == "__main__":
-#     save_tickers()
+@app.task(name='simpli.save_data', soft_time_limit=1000)
+def save_data():
+    try:
+        if redis_client.exists(f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE'):
+            done_cnt = redis_client.get(f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE')
+        else:
+            redis_client.set(f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE', 0)
+            done_cnt = 0
+
+        us_data_tickerlist = get(
+            redis_client, f'SIMPLI_WORKER_{RESPONSIBILITY}_US_TICKERS_LIST')
+
+        cnt = 0
+
+        for i in range(len(us_data_tickerlist)):
+            if cnt < done_cnt:
+                cnt = cnt + 1
+                print(
+                    f'Skipping request: ({cnt} / {len(us_data_tickerlist)}) until {done_cnt}')
+                continue
+            else:
+                ticker = us_data_tickerlist[i]
+
+                # Price data request and save
+                url = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={API_KEY}'
+                res = requests.get(url)
+                price_data = res.json()
+                save(
+                    redis_client,
+                    f'SIMPLI_US_{ticker}_PRICE_LIST',
+                    price_data
+                )
+
+                # Fundamental data request and save
+                url = f'https://eodhistoricaldata.com/api/fundamentals/{ticker}.US?fmt=json&api_token={API_KEY}'
+                res = requests.get(url)
+                fundamental_data = res.json()
+                save(
+                    redis_client,
+                    f'SIMPLI_US_{ticker}_FUNDAMENTAL_JSON',
+                    fundamental_data
+                )
+
+                cnt = cnt + 1
+                done_cnt = done_cnt + 1
+                if done_cnt == len(us_data_tickerlist):
+                    redis_client.set(f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE', 0)
+                else:
+                    redis_client.set(
+                        f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE', done_cnt)
+                    print(
+                        f'({done_cnt} / {len(us_data_tickerlist)}) {ticker} DONE')
+    except Exception as e:
+        print('Error:')
+        print(e)
+        sentry_sdk.capture_exception(e)
+        save_data()
+
+
+if __name__ == "__main__":
+    save_tickers()
+    save_data()
