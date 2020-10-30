@@ -18,6 +18,7 @@ RABBIT_PASSWORD = os.getenv('RABBIT_PASSWORD')
 RESPONSIBILITY = os.getenv('RESPONSIBILITY')  # 데이터를 나누어 맡을 부분
 API_KEY = os.getenv(f'API_{RESPONSIBILITY}')
 WORKER_COUNT = int(os.getenv('WORKER_COUNT'))
+print(f'[Started] Worker {RESPONSIBILITY}. API KEY: {API_KEY}')
 
 sentry_sdk.init(
     "https://05806a5a14a14d0cb8bef35b555bef20@o158142.ingest.sentry.io/5444337",
@@ -32,13 +33,8 @@ app = Celery(
 app.conf.celery_timezone = 'Asia/Seoul'
 app.conf.celery_enable_utc = True
 app.conf.beat_schedule = {
-    'save tickers (every 3 hours)': {
-        'task': 'simpli.save_tickers',
-        'schedule': crontab(minute=0, hour='*/3'),
-        'args': (),
-    },
-    'save US price / fundamental data (every 12 hours)': {
-        'task': 'simpli.save_data',
+    'save tickers, price, fundamental data (every 12 hours)': {
+        'task': 'simpli.distribute_tasks',
         'schedule': crontab(minute=0, hour='*/12'),
         'args': (),
     },
@@ -70,7 +66,14 @@ redis_client = cache_conn()
 
 ###########################################################
 ###########################################################
-@app.task(name='simpli.save_tickers', soft_time_limit=1000)
+@app.task(name='simpli.distribute_tasks')
+def distribute_tasks():
+    save_tickers()
+    for i in range(WORKER_COUNT):
+        save_data.delay(i + 1)
+
+
+@app.task(name='simpli.save_tickers')
 def save_tickers():
     url = f'https://eodhistoricaldata.com/api/exchange-symbol-list/US?fmt=json&api_token={API_KEY}'
     res = requests.get(url)
@@ -131,17 +134,20 @@ def save_tickers():
         )
 
 
-@app.task(name='simpli.save_data', soft_time_limit=1000)
-def save_data():
+@app.task(name='simpli.save_data')
+def save_data(responsibility_num):
+    worker_num = int(responsibility_num)
+    api_key = os.getenv(f'API_{worker_num}')
+
     try:
-        if redis_client.exists(f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE'):
-            done_cnt = redis_client.get(f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE')
+        if redis_client.exists(f'SIMPLI_WORKER_{worker_num}_DONE'):
+            done_cnt = redis_client.get(f'SIMPLI_WORKER_{worker_num}_DONE')
         else:
-            redis_client.set(f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE', 0)
+            redis_client.set(f'SIMPLI_WORKER_{worker_num}_DONE', 0)
             done_cnt = 0
 
         us_data_tickerlist = get(
-            redis_client, f'SIMPLI_WORKER_{RESPONSIBILITY}_US_TICKERS_LIST')
+            redis_client, f'SIMPLI_WORKER_{worker_num}_US_TICKERS_LIST')
 
         cnt = 0
 
@@ -155,7 +161,7 @@ def save_data():
                 ticker = us_data_tickerlist[i]
 
                 # Price data request and save
-                url = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={API_KEY}'
+                url = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_key}'
                 res = requests.get(url)
                 price_data = res.json()
                 save(
@@ -165,7 +171,7 @@ def save_data():
                 )
 
                 # Fundamental data request and save
-                url = f'https://eodhistoricaldata.com/api/fundamentals/{ticker}.US?fmt=json&api_token={API_KEY}'
+                url = f'https://eodhistoricaldata.com/api/fundamentals/{ticker}.US?fmt=json&api_token={api_key}'
                 res = requests.get(url)
                 fundamental_data = res.json()
                 save(
@@ -177,17 +183,17 @@ def save_data():
                 cnt = cnt + 1
                 done_cnt = done_cnt + 1
                 if done_cnt == len(us_data_tickerlist):
-                    redis_client.set(f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE', 0)
+                    redis_client.set(f'SIMPLI_WORKER_{worker_num}_DONE', 0)
                 else:
                     redis_client.set(
-                        f'SIMPLI_WORKER_{RESPONSIBILITY}_DONE', done_cnt)
+                        f'SIMPLI_WORKER_{worker_num}_DONE', done_cnt)
                     print(
                         f'({done_cnt} / {len(us_data_tickerlist)}) {ticker} DONE')
     except Exception as e:
         print('Error:')
         print(e)
         sentry_sdk.capture_exception(e)
-        save_data()
+        save_data(worker_num)
 
 
 # if __name__ == "__main__":

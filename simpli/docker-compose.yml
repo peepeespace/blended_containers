@@ -2,10 +2,35 @@ version: "3"
 
 services:
 
-  celery:
+  celery_1:
     build:
       context: .
-    container_name: simpli_celery_worker
+    container_name: simpli_worker_1
+    command: celery -A tasks worker --loglevel=INFO -n simpli-worker-1@%h
+    environment:
+      RESPONSIBILITY: 1
+    networks:
+      - simpli
+    restart: unless-stopped
+
+  celery_2:
+    build:
+      context: .
+    container_name: simpli_worker_2
+    command: celery -A tasks worker --loglevel=INFO -n simpli-worker-2@%h
+    environment:
+      RESPONSIBILITY: 2
+    networks:
+      - simpli
+    restart: unless-stopped
+
+  celery_3:
+    build:
+      context: .
+    container_name: simpli_worker_3
+    command: celery -A tasks worker --loglevel=INFO -n simpli-worker-3@%h
+    environment:
+      RESPONSIBILITY: 3
     networks:
       - simpli
     restart: unless-stopped
