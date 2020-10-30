@@ -3,17 +3,14 @@ version: "3"
 services:
 
   queue:
-    image: rabbitmq:management
+    build:
+      context: .
+      dockerfile: RabbitDockerfile
     container_name: rabbitmq_queue
-    environment:
-      RABBITMQ_DEFAULT_USERNAME: blended
-      RABBITMQ_DEFAULT_PASSWORD: makeitpopweBLENDED!1
     ports:
       - 5672:5672
       - 15672:15672
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
   
   cache:
     image: redis
@@ -23,9 +20,7 @@ services:
       - 6379:6379
     volumes:
       - cache_data:/data
-    deploy:
-      restart_policy:
-        condition: on-failure
+    restart: unless-stopped
 
 
 volumes:

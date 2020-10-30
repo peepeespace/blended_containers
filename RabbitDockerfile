@@ -1,0 +1,6 @@
+FROM rabbitmq:management
+RUN rabbitmqctl add_user blended makeitpopweBLENDED11
+RUN rabbitmqctl set_user_tags blended administrator
+RUN rabbitmqctl set_permissions -p / blended ".*" ".*" ".*"
+EXPOSE 5672
+EXPOSE 15672
