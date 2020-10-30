@@ -6,8 +6,8 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq_queue
     environment:
-      - RABBITMQ_DEFAULT_USER: blended
-      - RABBITMQ_DEFAULT_PASS: makeitpopweBLENDED11
+      - RABBITMQ_DEFAULT_USER: "blended"
+      - RABBITMQ_DEFAULT_PASS: "makeitpopweBLENDED11"
     ports:
       - 5672:5672
       - 15672:15672
