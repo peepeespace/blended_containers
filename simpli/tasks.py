@@ -24,6 +24,13 @@ app = Celery(
 )
 app.conf.celery_timezone = 'Asia/Seoul'
 app.conf.celery_enable_utc = True
+app.conf.beat_schedule = {
+    'save tickers (every 3 hours)': {
+        'task': 'simpli.save_tickers',
+        'schedule': crontab(minute=0, hour='*/3'),
+        'args': (),
+    },
+}
 
 cctx = zstd.ZstdCompressor()
 dctx = zstd.ZstdDecompressor()
@@ -72,11 +79,8 @@ def get(redis_client, key):
 redis_client = cache_conn()
 
 
-@app.on_after_configure.connect
-def setup_periodic_tasks(sender, **kwargs):
-    sender.add_periodic_task(60.0, save_tickers.s(), name='save tickers every minute')
-
-
+###########################################################
+###########################################################
 @app.task(name='simpli.save_tickers', soft_time_limit=1000)
 def save_tickers():
     url = f'https://eodhistoricaldata.com/api/exchange-symbol-list/US?fmt=json&api_token={API_KEY}'

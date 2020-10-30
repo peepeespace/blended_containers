@@ -1,0 +1,33 @@
+version: "3"
+
+services:
+
+  celery:
+    build:
+      context: .
+    container_name: simpli_celery_worker
+    networks:
+      - simpli
+    restart: unless-stopped
+
+  celerybeat:
+    build:
+      context: ./beats
+    container_name: simpli_celerybeat
+    networks:
+      - simpli
+    restart: unless-stopped
+
+  celeryflower:
+    build:
+      context: ./flower
+    container_name: simpli_celeryflower
+    networks:
+      - simpli
+    ports:
+      - 5555:5555
+    restart: unless-stopped
+
+networks:
+  simpli:
+    driver: bridge
