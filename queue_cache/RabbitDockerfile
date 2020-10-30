@@ -1,0 +1,8 @@
+FROM rabbitmq:management
+ENV RABBITMQ_DEFAULT_USER blended
+ENV RABBITMQ_DEFAULT_PASSWORD makeitpopweBLENDED11
+ADD init_user.sh /init_user.sh
+RUN chmod +x /init_user.sh
+EXPOSE 5672
+EXPOSE 15672
+CMD ["/init_user.sh"]
