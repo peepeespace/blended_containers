@@ -152,7 +152,7 @@ def save_data(responsibility_num):
         cnt = 0
 
         for i in range(len(us_data_tickerlist)):
-            if cnt < done_cnt:
+            if cnt < int(done_cnt):
                 cnt = cnt + 1
                 print(
                     f'Skipping request: ({cnt} / {len(us_data_tickerlist)}) until {done_cnt}')

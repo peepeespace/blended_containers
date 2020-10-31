@@ -1,3 +1,5 @@
 Pipfile
 tests/
 .env
+celerybeat-schedule.db
+node_modules
