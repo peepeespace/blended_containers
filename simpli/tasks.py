@@ -164,22 +164,34 @@ def save_data(responsibility_num):
                 # Price data request and save
                 url = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_key}'
                 res = requests.get(url)
-                price_data = res.json()
-                save(
-                    redis_client,
-                    f'SIMPLI_US_{ticker}_PRICE_LIST',
-                    price_data
-                )
+                try:
+                    price_data = res.json()
+                    save(
+                        redis_client,
+                        f'SIMPLI_US_{ticker}_PRICE_LIST',
+                        price_data
+                    )
+                except:
+                    # json decode error
+                    print(res)
+                    print(res.content)
+                    print(f'Skipping {ticker} price data. Error')
 
                 # Fundamental data request and save
                 url = f'https://eodhistoricaldata.com/api/fundamentals/{ticker}.US?fmt=json&api_token={api_key}'
                 res = requests.get(url)
-                fundamental_data = res.json()
-                save(
-                    redis_client,
-                    f'SIMPLI_US_{ticker}_FUNDAMENTAL_JSON',
-                    fundamental_data
-                )
+                try:
+                    fundamental_data = res.json()
+                    save(
+                        redis_client,
+                        f'SIMPLI_US_{ticker}_FUNDAMENTAL_JSON',
+                        fundamental_data
+                    )
+                except:
+                    # json decode error
+                    print(res)
+                    print(res.content)
+                    print(f'Skipping {ticker} fundamental data. Error')
 
                 cnt = cnt + 1
                 done_cnt = done_cnt + 1
@@ -190,6 +202,7 @@ def save_data(responsibility_num):
                         f'SIMPLI_WORKER_{worker_num}_DONE', done_cnt)
                     print(
                         f'({done_cnt} / {len(us_data_tickerlist)}) {ticker} DONE')
+
     except Exception as e:
         print('Error:')
         print(e)
