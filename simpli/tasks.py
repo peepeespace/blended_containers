@@ -141,7 +141,8 @@ def save_data(responsibility_num):
 
     try:
         if redis_client.exists(f'SIMPLI_WORKER_{worker_num}_DONE'):
-            done_cnt = redis_client.get(f'SIMPLI_WORKER_{worker_num}_DONE')
+            done_cnt = int(redis_client.get(
+                f'SIMPLI_WORKER_{worker_num}_DONE'))
         else:
             redis_client.set(f'SIMPLI_WORKER_{worker_num}_DONE', 0)
             done_cnt = 0
@@ -152,7 +153,7 @@ def save_data(responsibility_num):
         cnt = 0
 
         for i in range(len(us_data_tickerlist)):
-            if cnt < int(done_cnt):
+            if cnt < done_cnt:
                 cnt = cnt + 1
                 print(
                     f'Skipping request: ({cnt} / {len(us_data_tickerlist)}) until {done_cnt}')
