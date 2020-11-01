@@ -1,3 +1,4 @@
 https://geko.cloud/nginx-and-ssl-with-certbot-in-docker-alpine/
 
-docker run -v $(pwd)/letsencrypt:/etc/letsencrypt --name nginx -ti -p 8080:80 nginx-certbot sh
+docker build -t nginx-certbot .
+docker run -v $(pwd)/letsencrypt:/etc/letsencrypt --name loadbalancer -ti -p 80:80 nginx-certbot sh
