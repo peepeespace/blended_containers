@@ -1,0 +1,35 @@
+{
+  "name": "simpli_api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon --exec babel-node app.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "babel": {
+    "presets": [
+      "@babel/preset-env"
+    ]
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.12.1",
+    "@babel/core": "^7.12.3",
+    "@babel/node": "^7.12.1",
+    "@babel/preset-env": "^7.12.1"
+  },
+  "dependencies": {
+    "apollo-datasource": "^0.7.2",
+    "apollo-server-koa": "^2.19.0",
+    "async-redis": "^1.1.7",
+    "axios": "^0.21.0",
+    "dotenv": "^8.2.0",
+    "graphql": "^15.4.0",
+    "koa": "^2.13.0",
+    "koa-bodyparser": "^4.3.0",
+    "node-zstandard": "^1.2.4",
+    "redis": "^3.0.2"
+  }
+}

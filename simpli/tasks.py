@@ -200,8 +200,7 @@ def save_data(responsibility_num):
                 else:
                     redis_client.set(
                         f'SIMPLI_WORKER_{worker_num}_DONE', done_cnt)
-                    print(
-                        f'({done_cnt} / {len(us_data_tickerlist)}) {ticker} DONE')
+                print(f'({done_cnt} / {len(us_data_tickerlist)}) {ticker} DONE')
 
     except Exception as e:
         print('Error:')
@@ -210,6 +209,8 @@ def save_data(responsibility_num):
         save_data(worker_num)
 
 
-# if __name__ == "__main__":
-#     save_tickers()
-#     save_data()
+if __name__ == "__main__":
+    # save_tickers()
+    # save_data()
+
+    print(get(redis_client, 'SIMPLI_COMPLETE_TICKERS_DICT'))
