@@ -1,0 +1,9 @@
+version: "3"
+
+services:
+  simpli_db:
+    build:
+      context: .
+    container_name: simpli_postgresql
+    command: python3 manage.py runserver
+    restart: unless-stopped
