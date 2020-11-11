@@ -7,7 +7,8 @@ from data.models import (
     ETF,
     Factor,
     Index,
-    MarketCap
+    MarketCap,
+    USPrice
 )
 
 
@@ -18,3 +19,4 @@ admin.site.register(ETF)
 admin.site.register(Factor)
 admin.site.register(Index)
 admin.site.register(MarketCap)
+admin.site.register(USPrice)

@@ -5,3 +5,9 @@ celerybeat-schedule.db
 node_modules
 package-lock.json
 zstd
+finance_db/raw_data
+db.sqlite3
+*/*_saved.txt
+*/*_err.txt
+.DS_Store
+*/.DS_Store

@@ -1,0 +1,8 @@
+blended --> fnguide 데이터 수집기 (nodejs)
+finance_db --> fnguide 데이터 수집기 (django)
+jenkins --> 파이썬, nodejs 인스톨 bash 스크립트
+loadbalancer --> nginx 도커 파일 (현재 사용하지 않고 있음)
+queue_cache --> redis, rabbitmq 도커 컴포즈 파일
+simpli --> graphql 기반 simpli api 서버 (현재 사용하지 않고 있음)
+simpli_api_py --> fastapi 기반 simpli api 서버
+tbd_trader --> socket.io 틱데이터 서버 (아직 개발중)

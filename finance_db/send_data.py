@@ -181,7 +181,7 @@ def send_data(data_type):
         return exists
 
     try:
-        saved_list = open(f'{data_type}.csv', 'r').read().split('\n')
+        saved_list = open(f'{data_type}_saved.txt', 'r').read().split('\n')
     except:
         saved_list = []
 

@@ -68,8 +68,8 @@ class ETF(models.Model):
     code = models.CharField(max_length=20, blank=True, null=True)
     name = models.CharField(max_length=200, blank=True, null=True)
     cls_prc = models.FloatField(blank=True, null=True)
-    trd_qty = models.IntegerField(blank=True, null=True)
-    trd_amt = models.IntegerField(blank=True, null=True)  # (x1000)
+    trd_qty = models.BigIntegerField(blank=True, null=True)
+    trd_amt = models.BigIntegerField(blank=True, null=True)  # (x1000)
     etf_nav = models.FloatField(blank=True, null=True)
     spread = models.FloatField(blank=True, null=True)
 
@@ -122,3 +122,18 @@ class MarketCap(models.Model):
 
 class Financial(models.Model):
     pass
+
+
+##### US Data Simpli #####
+class USPrice(models.Model):
+    date = models.CharField(max_length=10, blank=True, null=True)
+    code = models.CharField(max_length=20, blank=True, null=True)
+    open_price = models.FloatField(blank=True, null=True)
+    high_price = models.FloatField(blank=True, null=True)
+    low_price = models.FloatField(blank=True, null=True)
+    close_price = models.FloatField(blank=True, null=True)
+    adjusted_close = models.FloatField(blank=True, null=True,)
+    volume = models.BigIntegerField(blank=True, null=True)
+
+    def __str__(self):
+        return '{} {}'.format(self.date, self.code)
