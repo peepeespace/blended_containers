@@ -4,7 +4,7 @@ import os
 import json
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from fastapi.middlewares.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel
