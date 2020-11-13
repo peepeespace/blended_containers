@@ -4,6 +4,7 @@ import os
 import json
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middlewares.cors import CORSMiddleware
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel
@@ -15,6 +16,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*']
+)
+
 redis = None
 dctx = zstd.ZstdDecompressor()
 
