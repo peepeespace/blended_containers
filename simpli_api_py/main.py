@@ -56,15 +56,16 @@ async def request_token():
 
 
 @app.get('/tickers/')
-async def get_tickers(token: str):
+async def get_tickers(token: str, name: bool = False):
     if token == app_token:
-        raw = await redis.get('SIMPLI_US_TICKERS_LIST')
-        tickerlist = json.loads(dctx.decompress(raw))
+        key = 'SIMPLI_US_TICKERS_LIST' if not name else 'SIMPLI_US_TICKERSNAME_LIST'
+        raw = await redis.get(key)
+        ticker_list = json.loads(dctx.decompress(raw))
         return {
             'status': '200_SUCCESS',
             'method': 'get_tickers',
-            'data': tickerlist,
-            'count': len(tickerlist)
+            'data': ticker_list,
+            'count': len(ticker_list)
         }
     else:
         return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_tickers', 'data': None, 'message': 'wrong token'})

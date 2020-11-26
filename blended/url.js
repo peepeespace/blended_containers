@@ -27,4 +27,5 @@ export const URL = {
 		factor:
 			"http://www.fnguide.com/api/Fgdd/StkDateShareIndxGrdDataDate?IN_SEARCH_DT={0}&IN_MKT_TYPE=0&IN_CONSOLIDATED=1",
 	},
+	FINANCIAL_PAGE: "https://www.fnguide.com/api/fgdd/GetFinByIndiv?IN_GICODE=A{0}&IN_GS_GB={1}&IN_ACCT_STD=I&IN_CONSOLIDATED=1&IN_ACNT_CODE=10&IN_DETAIL=10&IN_MAXYEAR={2}"
 };

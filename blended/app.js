@@ -17,14 +17,18 @@ const main = async () => {
 	let data;
 	let processedData;
 
-	////////
-	// #1 //
-	////////
-	// date list for Korean stocks (005930 / 삼성전자를 기준으로 수집)
-	data = await puppet.massDateCrawl();
-	processor.setData(data);
-	processedData = processor.processMassDate();
-	await redis.setList(processedData);
+	// ////////
+	// // #1 //
+	// ////////
+	// // date list for Korean stocks (005930 / 삼성전자를 기준으로 수집)
+	// data = await puppet.massDateCrawl();
+	// processor.setData(data);
+	// processedData = processor.processMassDate();
+	// await redis.setList(processedData);
+
+	data = await puppet.getFundamentalData('005930', 'quarterly', '70', 'financial_statement');
+
+	console.log(data['Data'][0]);
 
 	await puppet.done();
 	return true;

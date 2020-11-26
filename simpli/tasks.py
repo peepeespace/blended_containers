@@ -104,6 +104,13 @@ def save_tickers():
         us_data_tickerlist
     )
 
+    us_data_tickernamelist = [[d['Code'], d['Name']] for _, d in us_dict.items()]
+    save(
+        redis_client,
+        'SIMPLI_US_TICKERSNAME_LIST',
+        us_data_tickernamelist
+    )
+
     # Type of all the securities in USA (list)
     sec_types = list(set(d['Type'] for _, d in us_dict.items()))
     save(

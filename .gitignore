@@ -11,3 +11,4 @@ db.sqlite3
 */*_err.txt
 .DS_Store
 */.DS_Store
+finance_db/.DS_Store

@@ -90,6 +90,29 @@ class Puppet {
 		});
 	}
 
+	getFundamentalData(ticker, period = 'yearly', years = '100', type = '10') {
+		ticker = `A${ticker}`;
+		period = (period == 'yearly') ? 'D' : 'Q';
+		years = (period == 'yearly') ? '100' : '70';
+		if (type == 'financial_statement') {
+			type = '10';
+		}
+		if (type == 'income_statement') {
+			type = '20';
+		}
+		if (type == 'cash_flow') {
+			type = '30';
+		}
+		if (type == 'capital_changes') {
+			type = '40';
+		}
+		if (type == 'financial_ratio') {
+			type = '99';
+			years = '20';
+		}
+		return `https://www.fnguide.com/api/fgdd/GetFinByIndiv?IN_GICODE=${ticker}&IN_GS_GB=${period}&IN_ACCT_STD=I&IN_CONSOLIDATED=1&IN_ACNT_CODE=${type}&IN_DETAIL=10&IN_MAXYEAR=${years}`;
+	}
+
 	async massDateCrawl() {
 		return await this.requestData(
 			'Mass Date Crawl',
