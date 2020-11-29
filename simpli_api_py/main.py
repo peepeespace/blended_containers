@@ -30,6 +30,13 @@ dctx = zstd.ZstdDecompressor()
 app_token = 'blendedrequesttoken'
 
 
+class ExchangeType(str, Enum):
+    us = 'US'
+    ko = 'KO'
+    kq = 'KQ'
+    indx = 'INDX'
+
+
 class DataShape(str, Enum):
     json = 'json'
     array = 'array'
@@ -56,9 +63,10 @@ async def request_token():
 
 
 @app.get('/tickers/')
-async def get_tickers(token: str, name: bool = False):
+async def get_tickers(token: str, name: bool = False, full_info: bool = False, exchange: Optional[ExchangeType] = 'US'):
     if token == app_token:
-        key = 'SIMPLI_US_TICKERS_LIST' if not name else 'SIMPLI_US_TICKERSNAME_LIST'
+        key = f'SIMPLI_{exchange}_TICKERS_LIST' if not name else f'SIMPLI_{exchange}_TICKERSNAME_LIST'
+        key = f'SIMPLI_{exchange}_FILTERED_TICKERSNAMELIST' if full_info else key
         raw = await redis.get(key)
         ticker_list = json.loads(dctx.decompress(raw))
         return {
@@ -71,10 +79,25 @@ async def get_tickers(token: str, name: bool = False):
         return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_tickers', 'data': None, 'message': 'wrong token'})
 
 
-@app.get('/types/')
-async def get_types(token: str):
+@app.get('/all-tickers')
+async def get_all_tickers(token: str):
     if token == app_token:
-        raw = await redis.get('SIMPLI_US_TICKERS_TYPES_LIST')
+        raw = await redis.get('SIMPLI_FILTERED_TICKERSNAMELIST')
+        ticker_list = json.loads(dctx.decompress(raw))
+        return {
+            'status': '200_SUCCESS',
+            'method': 'get_all_tickers',
+            'data': ticker_list,
+            'count': len(ticker_list)
+        }
+    else:
+        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_all_tickers', 'data': None, 'message': 'wrong token'})
+
+
+@app.get('/types/')
+async def get_types(token: str, exchange: Optional[ExchangeType] = 'US'):
+    if token == app_token:
+        raw = await redis.get(f'SIMPLI_{exchange}_TICKERS_TYPES_LIST')
         typeslist = json.loads(dctx.decompress(raw))
         return {
             'status': '200_SUCCESS',
@@ -83,13 +106,13 @@ async def get_types(token: str):
             'count': len(typeslist)
         }
     else:
-        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_tickers', 'data': None, 'message': 'wrong token'})
+        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_types', 'data': None, 'message': 'wrong token'})
 
 
 @app.get('/info/')
-async def get_info(token: str, ticker: str = '', stock_type: str = '', ticker_only: bool = False):
+async def get_info(token: str, ticker: str = '', stock_type: str = '', ticker_only: bool = False, exchange: Optional[ExchangeType] = 'US'):
     if token == app_token:
-        raw = await redis.get('SIMPLI_US_TICKERS_DICT')
+        raw = await redis.get(f'SIMPLI_{exchange}_TICKERS_DICT')
         ticker_dict = json.loads(dctx.decompress(raw))
 
         if ticker != '':
@@ -112,18 +135,18 @@ async def get_info(token: str, ticker: str = '', stock_type: str = '', ticker_on
             'count': len(ticker_dict.keys()) if type(ticker_dict) == dict else len(ticker_dict)
         }
     else:
-        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_tickers', 'data': None, 'message': 'wrong token'})
+        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_info', 'data': None, 'message': 'wrong token'})
 
 
 @app.get('/price/{ticker}/')
-async def get_price(ticker: str, token: str, date_from: Optional[str] = '', date_to: Optional[str] = '', format: Optional[DataShape] = 'json', fields: Optional[str] = 'all'):
+async def get_price(ticker: str, token: str, exchange: Optional[ExchangeType] = 'US', date_from: Optional[str] = '', date_to: Optional[str] = '', format: Optional[DataShape] = 'json', fields: Optional[str] = 'all'):
     # token filter
     if token == app_token:
-        tickers = await redis.get('SIMPLI_US_TICKERS_LIST')
+        tickers = await redis.get(f'SIMPLI_{exchange}_TICKERS_LIST')
         tickerlist = json.loads(dctx.decompress(tickers))
         if ticker not in tickerlist:
             return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_price', 'data': None, 'message': 'no such ticker'})
-        raw = await redis.get(f'SIMPLI_US_{ticker}_PRICE_LIST')
+        raw = await redis.get(f'SIMPLI_{exchange}_{ticker}_PRICE_LIST')
         pricelist = json.loads(dctx.decompress(raw))
 
         # date filters
@@ -146,7 +169,7 @@ async def get_price(ticker: str, token: str, date_from: Optional[str] = '', date
                     pricelist = [list(map(d.get, fields_list))
                                  for d in pricelist]
                 except:
-                    return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_tickers', 'data': None, 'message': 'fields should be in format: x,x,x'})
+                    return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_price', 'data': None, 'message': 'fields should be in format: x,x,x'})
         elif format == 'json':
             if fields != 'all':
                 try:
@@ -154,7 +177,7 @@ async def get_price(ticker: str, token: str, date_from: Optional[str] = '', date
                     pricelist = [
                         {key: d.get(key)for key in fields_list} for d in pricelist]
                 except:
-                    return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_tickers', 'data': None, 'message': 'fields should be in format: x,x,x'})
+                    return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_price', 'data': None, 'message': 'fields should be in format: x,x,x'})
 
         return {
             'status': '200_SUCCESS',
@@ -168,17 +191,17 @@ async def get_price(ticker: str, token: str, date_from: Optional[str] = '', date
             'count': len(pricelist)
         }
     else:
-        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_tickers', 'data': None, 'message': 'wrong token'})
+        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_price', 'data': None, 'message': 'wrong token'})
 
 
 @app.get('/fundamental/{ticker}/')
-async def get_fundamental(ticker: str, token: str, field: Optional[str] = 'all', subfield: Optional[str] = 'all', keyvalue: Optional[KeyValueType] = KeyValueType.value):
+async def get_fundamental(ticker: str, token: str, exchange: Optional[ExchangeType] = 'US', field: Optional[str] = 'all', subfield: Optional[str] = 'all', keyvalue: Optional[KeyValueType] = KeyValueType.value):
     if token == app_token:
-        tickers = await redis.get('SIMPLI_US_TICKERS_LIST')
+        tickers = await redis.get(f'SIMPLI_{exchange}_TICKERS_LIST')
         tickerlist = json.loads(dctx.decompress(tickers))
         if ticker not in tickerlist:
-            return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_price', 'data': None, 'message': 'no such ticker'})
-        raw = await redis.get(f'SIMPLI_US_{ticker}_FUNDAMENTAL_JSON')
+            return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_fundamental', 'data': None, 'message': 'no such ticker'})
+        raw = await redis.get(f'SIMPLI_{exchange}_{ticker}_FUNDAMENTAL_JSON')
         fundamental_json = json.loads(dctx.decompress(raw))
         try:
             fundamental_data = fundamental_json if field == 'all' else fundamental_json[field]
@@ -210,4 +233,23 @@ async def get_fundamental(ticker: str, token: str, field: Optional[str] = 'all',
             'data': fundamental_data
         }
     else:
-        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_tickers', 'data': None, 'message': 'wrong token'})
+        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_fundamental', 'data': None, 'message': 'wrong token'})
+
+
+@app.get('/div/{ticker}/')
+async def get_dividend(ticker: str, token: str, exchange: Optional[ExchangeType] = 'US'):
+    if token == app_token:
+        tickers = await redis.get(f'SIMPLI_{exchange}_TICKERS_LIST')
+        tickerlist = json.loads(dctx.decompress(tickers))
+        if ticker not in tickerlist:
+            return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_dividend', 'data': None, 'message': 'no such ticker'})
+        raw = await redis.get(f'SIMPLI_{exchange}_{ticker}_DIVIDEND_LIST')
+        dividendlist = json.loads(dctx.decompress(raw))
+        return {
+            'status': '200_SUCCESS',
+            'method': 'get_dividend',
+            'data': dividendlist,
+            'count': len(dividendlist)
+        }
+    else:
+        return JSONResponse(status_code=400, content={'status': '400_ERROR', 'method': 'get_dividend', 'data': None, 'message': 'wrong token'})
