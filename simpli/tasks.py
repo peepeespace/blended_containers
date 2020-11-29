@@ -75,68 +75,110 @@ def distribute_tasks():
 
 @app.task(name='simpli.save_tickers')
 def save_tickers():
-    url = f'https://eodhistoricaldata.com/api/exchange-symbol-list/US?fmt=json&api_token={API_KEY}'
-    res = requests.get(url)
-    data = res.json()
+    tickers = {}
 
-    # Complete dictionary of security data provided by edohistorical (dict)
-    data_dict = {d['Code']: d for d in data}
+    # US, KO, KQ --> eod, fundamentals, div
+    # INDX --> eod, fundamentals
+    exchange_list = ['US', 'KO', 'KQ', 'INDX']
+
+    for exchange in exchange_list:
+        url = f'https://eodhistoricaldata.com/api/exchange-symbol-list/{exchange}?fmt=json&api_token={API_KEY}'
+        res = requests.get(url)
+        tickers[exchange] = res.json()
+
+    total_tickerslist = []
+
+    for exchange, exchange_tickers in tickers.items():
+        data = exchange_tickers
+
+        # Complete dictionary of security data provided by edohistorical (dict)
+        data_dict = {d['Code']: d for d in data}
+        save(
+            redis_client,
+            f'SIMPLI_{exchange}_TICKERS_DICT',
+            data_dict
+        )
+
+        # Changed Filtered USA securities to list with tickers only (list)
+        data_tickerlist = [d['Code'] for _, d in data_dict.items()]
+        save(
+            redis_client,
+            f'SIMPLI_{exchange}_TICKERS_LIST',
+            data_tickerlist
+        )
+
+        # Changed Filtered USA securities to list with tickers, name only (list)
+        data_tickernamelist = [[d['Code'], d['Name']] for _, d in data_dict.items()]
+        save(
+            redis_client,
+            f'SIMPLI_{exchange}_TICKERSNAME_LIST',
+            data_tickernamelist
+        )
+
+        # US, KO, KQ에서 펀드, 채권 등 불필요한 정보 제외하기
+        filter_type = ['Preferred Stock', 'Common Stock', 'Preferred Share', 'ETF', 'INDEX']
+        data_filtered_list = []
+        for _, val in data_dict.items():
+            if val['Type'] in filter_type:
+
+                # 보통주, 우선주, ETF로 한글 명칭으로 바꿔주기
+                if val['Type'] == 'Preferred Stock' or val['Type'] == 'Preferred Share':
+                    stock_type = '우선주'
+                elif val['Type'] == 'Common Stock':
+                    stock_type = '보통주'
+                elif val['Type'] == 'ETF':
+                    stock_type = 'ETF'
+                elif val['Type'] == 'INDEX':
+                    stock_type = '지수'
+
+                data_filtered_list.append([
+                    val['Code'],
+                    val['Name'],
+                    val['Country'],
+                    val['Exchange'],
+                    val['Currency'],
+                    stock_type
+                ])
+        total_tickerslist = total_tickerslist + data_filtered_list
+        save(
+            redis_client,
+            f'SIMPLI_{exchange}_FILTERED_TICKERSNAMELIST',
+            data_filtered_list
+        )
+
+        # Type of all the securities in all US, KO, KQ, INDX exchanges (list)
+        sec_types = list(set(d['Type'] for _, d in data_dict.items()))
+        save(
+            redis_client,
+            f'SIMPLI_{exchange}_TICKERS_TYPES_LIST',
+            sec_types
+        )
+
     save(
         redis_client,
-        'SIMPLI_COMPLETE_TICKERS_DICT',
-        data_dict
+        'SIMPLI_FILTERED_TICKERSNAMELIST',
+        total_tickerslist
     )
-
-    # Filtered USA securities from Complete dictionary (dict)
-    us_dict = {key: val for key, val in data_dict.items()
-               if val['Country'] == 'USA'}
-    save(
-        redis_client,
-        'SIMPLI_US_TICKERS_DICT',
-        us_dict
-    )
-
-    # Changed Filtered USA securities to list with tickers only (list)
-    us_data_tickerlist = [d['Code'] for _, d in us_dict.items()]
-    save(
-        redis_client,
-        'SIMPLI_US_TICKERS_LIST',
-        us_data_tickerlist
-    )
-
-    us_data_tickernamelist = [[d['Code'], d['Name']] for _, d in us_dict.items()]
-    save(
-        redis_client,
-        'SIMPLI_US_TICKERSNAME_LIST',
-        us_data_tickernamelist
-    )
-
-    # Type of all the securities in USA (list)
-    sec_types = list(set(d['Type'] for _, d in us_dict.items()))
-    save(
-        redis_client,
-        'SIMPLI_US_TICKERS_TYPES_LIST',
-        sec_types
-    )
-
+    
     # Divide tickers list by worker count (to divide work load among celery workers)
-    idx_step = len(us_data_tickerlist) // WORKER_COUNT
+    # 이 정보를 기반으로 워커들이 데이터를 저장한다
+    idx_step = len(total_tickerslist) // WORKER_COUNT
     start_idx = 0
     end_idx = idx_step
     data_list_dict = {}
 
     for i in range(WORKER_COUNT):
-        data_list_dict[str(i + 1)] = us_data_tickerlist[start_idx: end_idx]
+        data_list_dict[str(i + 1)] = total_tickerslist[start_idx:end_idx]
         start_idx = end_idx
         if i == WORKER_COUNT - 2:
-            end_idx = len(us_data_tickerlist)
+            end_idx = len(total_tickerslist)
         else:
             end_idx = (i + 2) * idx_step
 
     for num, val in data_list_dict.items():
         save(
             redis_client,
-            f'SIMPLI_WORKER_{num}_US_TICKERS_LIST',
+            f'SIMPLI_WORKER_{num}_TICKERS_LIST',
             val
         )
 
@@ -154,60 +196,82 @@ def save_data(responsibility_num):
             redis_client.set(f'SIMPLI_WORKER_{worker_num}_DONE', 0)
             done_cnt = 0
 
-        us_data_tickerlist = get(
-            redis_client, f'SIMPLI_WORKER_{worker_num}_US_TICKERS_LIST')
+        data_tickerlist = get(
+            redis_client, f'SIMPLI_WORKER_{worker_num}_TICKERS_LIST')
 
         cnt = 0
 
-        for i in range(len(us_data_tickerlist)):
+        for i in range(len(data_tickerlist)):
             if cnt < done_cnt:
                 cnt = cnt + 1
                 print(
-                    f'Skipping request: ({cnt} / {len(us_data_tickerlist)}) until {done_cnt}')
+                    f'Skipping request: ({cnt} / {len(data_tickerlist)}) until {done_cnt}')
                 continue
             else:
-                ticker = us_data_tickerlist[i]
+                exchange = data_tickerlist[i][3]
+                ticker = data_tickerlist[i][0]
 
+                ##### STEP 1 #####
                 # Price data request and save
-                url = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_key}'
+                url = f'https://eodhistoricaldata.com/api/eod/{ticker}.{exchange}?fmt=json&api_token={api_key}'
                 res = requests.get(url)
                 try:
                     price_data = res.json()
                     save(
                         redis_client,
-                        f'SIMPLI_US_{ticker}_PRICE_LIST',
+                        f'SIMPLI_{exchange}_{ticker}_PRICE_LIST',
                         price_data
                     )
                 except:
                     # json decode error
                     print(res)
                     print(res.content)
-                    print(f'Skipping {ticker} price data. Error')
+                    print(f'Skipping {ticker}.{exchange} price data. Error')
 
+                ##### STEP 2 #####
                 # Fundamental data request and save
-                url = f'https://eodhistoricaldata.com/api/fundamentals/{ticker}.US?fmt=json&api_token={api_key}'
+                url = f'https://eodhistoricaldata.com/api/fundamentals/{ticker}.{exchange}?fmt=json&api_token={api_key}'
                 res = requests.get(url)
                 try:
                     fundamental_data = res.json()
                     save(
                         redis_client,
-                        f'SIMPLI_US_{ticker}_FUNDAMENTAL_JSON',
+                        f'SIMPLI_{exchange}_{ticker}_FUNDAMENTAL_JSON',
                         fundamental_data
                     )
                 except:
                     # json decode error
                     print(res)
                     print(res.content)
-                    print(f'Skipping {ticker} fundamental data. Error')
+                    print(f'Skipping {ticker}.{exchange} fundamental data. Error')
+
+                ##### STEP 3 #####
+                # Dividends data request and save
+                # INDX는 dividend 정보 받지 않기
+                if exchange != 'INDX':
+                    url = f'https://eodhistoricaldata.com/api/div/{ticker}.{exchange}?fmt=json&api_token={api_key}'
+                    res = requests.get(url)
+                    try:
+                        dividend_data = res.json()
+                        save(
+                            redis_client,
+                            f'SIMPLI_{exchange}_{ticker}_DIVIDEND_LIST',
+                            dividend_data
+                        )
+                    except:
+                        # json decode error
+                        print(res)
+                        print(res.content)
+                        print(f'Skipping {ticker}.{exchange} dividend data. Error')
 
                 cnt = cnt + 1
                 done_cnt = done_cnt + 1
-                if done_cnt == len(us_data_tickerlist):
+                if done_cnt == len(data_tickerlist):
                     redis_client.set(f'SIMPLI_WORKER_{worker_num}_DONE', 0)
                 else:
                     redis_client.set(
                         f'SIMPLI_WORKER_{worker_num}_DONE', done_cnt)
-                print(f'({done_cnt} / {len(us_data_tickerlist)}) {ticker} DONE')
+                print(f'({done_cnt} / {len(data_tickerlist)}) {ticker} DONE')
 
     except Exception as e:
         print('Error:')
@@ -217,7 +281,8 @@ def save_data(responsibility_num):
 
 
 if __name__ == "__main__":
-    # save_tickers()
+    save_tickers()
     # save_data()
+    # get_korean_tickers()
 
-    print(get(redis_client, 'SIMPLI_COMPLETE_TICKERS_DICT'))
+    # print(get(redis_client, 'SIMPLI_COMPLETE_TICKERS_DICT'))
