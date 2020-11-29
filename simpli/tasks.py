@@ -135,6 +135,7 @@ def save_tickers():
                     val['Code'],
                     val['Name'],
                     val['Country'],
+                    exchange,
                     val['Exchange'],
                     val['Currency'],
                     stock_type
@@ -198,6 +199,9 @@ def save_data(responsibility_num):
 
         data_tickerlist = get(
             redis_client, f'SIMPLI_WORKER_{worker_num}_TICKERS_LIST')
+
+        print(data_tickerlist)
+        print(len(data_tickerlist))
 
         cnt = 0
 
@@ -282,7 +286,8 @@ def save_data(responsibility_num):
 
 if __name__ == "__main__":
     save_tickers()
-    # save_data()
+
+    # save_data(1)
     # get_korean_tickers()
 
     # print(get(redis_client, 'SIMPLI_COMPLETE_TICKERS_DICT'))
